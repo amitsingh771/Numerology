@@ -1,4 +1,5 @@
 import puppeteer from 'puppeteer'
+import chromium from '@sparticuz/chromium'
 import fs from 'fs'
 import path from 'path'
 
@@ -295,10 +296,15 @@ DR RONIE  PINTO\nASTRO VASTU GUR,  STAR NUMEROLOGIST & PARANORMAL HEALER\n+91 88
       </html>
     `
 
-    const browser = await puppeteer.launch({
-      headless: 'new',
-      args: ['--no-sandbox', '--disable-setuid-sandbox']
-    })
+    const isProd = process.env.VERCEL || process.env.AWS_REGION
+    const browser = isProd
+      ? await (await import('puppeteer-core')).default.launch({
+          args: chromium.args,
+          defaultViewport: chromium.defaultViewport,
+          executablePath: await chromium.executablePath(),
+          headless: chromium.headless,
+        })
+      : await puppeteer.launch({ headless: 'new', args: ['--no-sandbox', '--disable-setuid-sandbox'] })
     const page = await browser.newPage()
     await page.setContent(html, { waitUntil: 'networkidle0' })
     const pdfBuffer = await page.pdf({ format: 'A4', printBackground: true })
