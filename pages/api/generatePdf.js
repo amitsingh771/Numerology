@@ -1,6 +1,5 @@
-import chromium from "@sparticuz/chromium";
+import chromium from "chrome-aws-lambda";
 import puppeteer from "puppeteer-core";
-
 import fs from "fs";
 import path from "path";
 
@@ -121,81 +120,30 @@ function buildAttributesByDriver(driver) {
 }
 
 // ------------------- API Handler -------------------
+
 export default async function handler(req, res) {
-  if (req.method !== "POST" && req.method !== "GET") {
-    res.setHeader("Allow", ["POST", "GET"]);
-    return res.status(405).json({ error: "Method Not Allowed" });
-  }
-
   try {
-    const source = req.method === "GET" ? req.query : req.body;
-    const { fullName, email, mobile, dob } = source || {};
-    if (!fullName || !email || !mobile || !dob) {
-      return res.status(400).json({ error: "Missing required fields" });
-    }
-
-    // Compute numerology values
-    const { driver, conductor } = computeDriverAndConductor(dob);
-    const combo =
-      driver && conductor ? getCombinationFortune(driver, conductor) : null;
-    const today = new Date();
-    const regDate = `${String(today.getDate()).padStart(2, "0")}/${String(
-      today.getMonth() + 1
-    ).padStart(2, "0")}/${today.getFullYear()}`;
-    const longDob = formatLongDate(dob);
-    const attrs = buildAttributesByDriver(driver || 0);
-
-    // ---------------- HTML CONTENT ----------------
-    const html = `
-      <!doctype html>
-      <html>
-        <head><meta charset="utf-8" /></head>
-        <body>
-          <h1>Numerology Report</h1>
-          <p><strong>Name:</strong> ${fullName}</p>
-          <p><strong>Email:</strong> ${email}</p>
-          <p><strong>Mobile:</strong> ${mobile}</p>
-          <p><strong>Date of Birth:</strong> ${longDob}</p>
-          <p><strong>Driver / Conductor:</strong> ${driver} / ${conductor}</p>
-          <p><strong>Ruling Planet:</strong> ${attrs.rulingPlanet}</p>
-          <p><strong>Favourable Colours:</strong> ${attrs.favourableColours.join(
-            ", "
-          )}</p>
-          <p><strong>Combination Fortune:</strong> ${
-            combo?.description || "N/A"
-          }</p>
-        </body>
-      </html>
-    `;
-
-    // ---------------- Puppeteer PDF ----------------
     const browser = await puppeteer.launch({
       args: chromium.args,
       defaultViewport: chromium.defaultViewport,
-      executablePath: process.env.AWS_REGION
-        ? await chromium.executablePath()
-        : undefined, // <-- for local use installed Chrome
+      executablePath: await chromium.executablePath, // ✅ important
       headless: chromium.headless,
     });
 
     const page = await browser.newPage();
-    await page.setContent(html, { waitUntil: "domcontentloaded" });
+    await page.setContent("<h1>Hello PDF from Vercel</h1>", {
+      waitUntil: "networkidle0",
+    });
 
-    const pdfBuffer = await page.pdf({ format: "A4", printBackground: true });
+    const pdfBuffer = await page.pdf({ format: "A4" });
+
     await browser.close();
 
-    // Send PDF
     res.setHeader("Content-Type", "application/pdf");
-    res.setHeader(
-      "Content-Disposition",
-      'inline; filename="numerology-report.pdf"'
-    );
-    res.setHeader("Content-Length", pdfBuffer.length);
-    return res.end(pdfBuffer);
+    res.setHeader("Content-Disposition", "attachment; filename=output.pdf");
+    res.send(pdfBuffer);
   } catch (err) {
     console.error("PDF generation error:", err);
-    return res
-      .status(500)
-      .json({ error: "Failed to generate PDF", details: err.message });
+    res.status(500).json({ error: "Failed to generate PDF" });
   }
 }
