@@ -1,9 +1,8 @@
-import chromium from "chrome-aws-lambda";
-import puppeteer from "puppeteer-core";
+// pages/api/generatePdf.js
+import PDFDocument from "pdfkit";
 import fs from "fs";
 import path from "path";
 
-// ------------------- Utility Functions -------------------
 function sumDigitsToRoot(num) {
   let n = Math.abs(num);
   while (n > 9) {
@@ -74,34 +73,8 @@ function formatLongDate(dob) {
 }
 
 function buildAttributesByDriver(driver) {
-  const planetByNum = {
-    1: "Sun",
-    2: "Moon",
-    3: "Jupiter",
-    4: "Rahu",
-    5: "Mercury",
-    6: "Venus",
-    7: "Ketu",
-    8: "Saturn",
-    9: "Mars",
-  };
-  const defaults = {
-    rulingPlanet: planetByNum[driver] || "-",
-    contributingPlanet: "-",
-    influencingNumbers: [driver].filter(Boolean),
-    enemyNumbers: [],
-    favourableDays: [],
-    favourableColours: [],
-    coloursToAvoid: [],
-    favourableMetal: "-",
-    favourableGemstone: "-",
-    wonderLetters: [],
-    direction: "-",
-    notes: { mobileWallpaper: "" },
-  };
   if (driver === 1) {
     return {
-      ...defaults,
       rulingPlanet: "Sun",
       contributingPlanet: "Mars",
       influencingNumbers: [1, 5, 6, 9],
@@ -116,35 +89,127 @@ function buildAttributesByDriver(driver) {
       notes: { mobileWallpaper: "Fathers Pic always" },
     };
   }
-  return defaults;
+  return {
+    rulingPlanet: "-",
+    contributingPlanet: "-",
+    influencingNumbers: [driver].filter(Boolean),
+    enemyNumbers: [],
+    favourableDays: [],
+    favourableColours: [],
+    coloursToAvoid: [],
+    favourableMetal: "-",
+    favourableGemstone: "-",
+    wonderLetters: [],
+    direction: "-",
+    notes: { mobileWallpaper: "" },
+  };
 }
 
-// ------------------- API Handler -------------------
-
 export default async function handler(req, res) {
+  if (req.method !== "GET") {
+    res.setHeader("Allow", ["GET"]);
+    return res.status(405).json({ error: "Method Not Allowed" });
+  }
+
   try {
-    const isLocal = !process.env.AWS_REGION; // Vercel sets AWS_REGION in lambda
+    const { fullName, email, mobile, dob } = req.query;
+    if (!fullName || !email || !mobile || !dob) {
+      return res.status(400).json({ error: "Missing required fields" });
+    }
 
-    const browser = await puppeteer.launch({
-      args: isLocal ? [] : chromium.args,
-      defaultViewport: chromium.defaultViewport,
-      executablePath: isLocal
-        ? undefined // locally, puppeteer finds Chrome automatically
-        : await chromium.executablePath, // in Vercel, use chrome-aws-lambda
-      headless: true,
-    });
-
-    const page = await browser.newPage();
-    await page.setContent("<h1>Hello PDF</h1>", { waitUntil: "networkidle0" });
-
-    const pdfBuffer = await page.pdf({ format: "A4" });
-    await browser.close();
+    const { driver, conductor } = computeDriverAndConductor(dob);
+    const combo =
+      driver && conductor ? getCombinationFortune(driver, conductor) : null;
+    const today = new Date();
+    const regDate = `${String(today.getDate()).padStart(2, "0")}/${String(
+      today.getMonth() + 1
+    ).padStart(2, "0")}/${today.getFullYear()}`;
+    const longDob = formatLongDate(dob);
+    const attrs = buildAttributesByDriver(driver || 0);
+    const registrationNo = `NMR-${today.getFullYear()}${String(
+      today.getMonth() + 1
+    ).padStart(2, "0")}${String(today.getDate()).padStart(2, "0")}-${Date.now()
+      .toString()
+      .slice(-6)}`;
 
     res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", "attachment; filename=output.pdf");
-    res.send(pdfBuffer);
+    res.setHeader(
+      "Content-Disposition",
+      'inline; filename="numerology-report.pdf"'
+    );
+
+    const doc = new PDFDocument({ margin: 50 });
+    doc.pipe(res);
+
+    // Page 1 - Cover
+    doc.fontSize(22).text("NUMEROLOGY REPORT", { align: "center" });
+    doc.moveDown();
+    doc.fontSize(16).text(fullName, { align: "center" });
+    doc.text(longDob, { align: "center" });
+    doc.moveDown();
+    doc.text(`Registration No: ${registrationNo}`);
+    doc.text(`Date: ${regDate}`);
+    doc.text(`Mobile: ${mobile}`);
+    doc.text(`Email: ${email}`);
+    doc.addPage();
+
+    // Page 2 - Intro
+    doc.fontSize(18).text("Introduction", { underline: true });
+    doc.moveDown();
+    doc.fontSize(12).text(
+      `Numerology is an index to the Encyclopaedia of Life. It is a study of numbers wherein every number has a different vibration. Numerology helps in finding out the niche for every individual. It offers the advantage of weeding out thorns or obstacles on the way & rather helps in providing short-cuts.
+
+This Reading is composed for you personally, Sunny and is based on your date of birth.
+
+Date of Birth gives deep insights into the Life path, indicates skills one possesses as well as challenges one need to overcome. The day you were born bears great significance in understanding who you are going to head in life.
+
+Name is a powerful tool to describe the course of our life & Numerology is one of the most powerful & influential science widely used all over the world to set the course of our life in complete harmony.
+
+Numerology is the study of divine relation between numbers & coinciding events in life.
+
+We are happy to help your redesign your identity through:
+
+• Your Favourable Numbers
+• Your Favourable Colours
+• Your Favourable Vibrations
+Gift yourself the best identification with the most favourable numbers & name for yourself & your business to stand out in the society.
+
+You have every right to attract abundance to live a harmonious & peaceful life.` // (shortened)
+    );
+    doc.addPage();
+
+    // Page 3 - Attributes
+    doc.fontSize(18).text("Numerology Details", { underline: true });
+    doc.moveDown();
+    doc.fontSize(12).text(`Driver Number: ${driver}`);
+    doc.text(`Conductor Number: ${conductor}`);
+    doc.text(`Ruling Planet: ${attrs.rulingPlanet}`);
+    doc.text(`Contributing Planet: ${attrs.contributingPlanet}`);
+    doc.text(`Favourable Days: ${attrs.favourableDays.join(", ")}`);
+    doc.text(`Favourable Colours: ${attrs.favourableColours.join(", ")}`);
+    doc.text(`Colours to Avoid: ${attrs.coloursToAvoid.join(", ")}`);
+    doc.text(`Favourable Metal: ${attrs.favourableMetal}`);
+    doc.text(`Favourable Gemstone: ${attrs.favourableGemstone}`);
+    doc.addPage();
+
+    // Page 4 - Predictions
+    doc.fontSize(18).text("Numerology Prediction", { underline: true });
+    doc.moveDown();
+    doc
+      .fontSize(12)
+      .text(
+        `Ruled by ${attrs.rulingPlanet}. Leadership qualities, progressive, ambitious...`
+      );
+    doc.moveDown();
+    doc.text(`Combination Fortune (${driver}/${conductor}):`);
+    doc.text(combo?.description || "No description available");
+    doc.moveDown();
+    doc.text("Roles/Profession:");
+    doc.text(combo?.roles_profession || "—");
+
+    doc.end();
   } catch (err) {
-    console.error("PDF generation error:", err);
-    res.status(500).send("Failed to generate PDF");
+    console.error(err);
+    return res.status(500).json({ error: "Failed to generate PDF" });
   }
 }

@@ -22,16 +22,7 @@ const Form = () => {
     e.preventDefault();
     setSubmitting(true);
     try {
-      const res = await fetch("/api/generatePdf", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
-      });
-
-      if (!res.ok) {
-        throw new Error("Failed to generate PDF");
-      }
-      // Switch to GET with query params so the browser can stream PDF directly
+      // ✅ Use GET request directly with query params
       const params = new URLSearchParams(form).toString();
       const url = `/api/generatePdf?${params}`;
       window.open(url, "_blank", "noopener,noreferrer");
