@@ -121,22 +121,26 @@ function buildAttributesByDriver(driver) {
 
 // ------------------- API Handler -------------------
 
+import chromium from "chrome-aws-lambda";
+import puppeteer from "puppeteer-core";
+
 export default async function handler(req, res) {
   try {
+    const isLocal = !process.env.AWS_REGION; // Vercel sets AWS_REGION in lambda
+
     const browser = await puppeteer.launch({
-      args: chromium.args,
+      args: isLocal ? [] : chromium.args,
       defaultViewport: chromium.defaultViewport,
-      executablePath: await chromium.executablePath, // ✅ important
-      headless: chromium.headless,
+      executablePath: isLocal
+        ? undefined // locally, puppeteer finds Chrome automatically
+        : await chromium.executablePath, // in Vercel, use chrome-aws-lambda
+      headless: true,
     });
 
     const page = await browser.newPage();
-    await page.setContent("<h1>Hello PDF from Vercel</h1>", {
-      waitUntil: "networkidle0",
-    });
+    await page.setContent("<h1>Hello PDF</h1>", { waitUntil: "networkidle0" });
 
     const pdfBuffer = await page.pdf({ format: "A4" });
-
     await browser.close();
 
     res.setHeader("Content-Type", "application/pdf");
@@ -144,6 +148,6 @@ export default async function handler(req, res) {
     res.send(pdfBuffer);
   } catch (err) {
     console.error("PDF generation error:", err);
-    res.status(500).json({ error: "Failed to generate PDF" });
+    res.status(500).send("Failed to generate PDF");
   }
 }
