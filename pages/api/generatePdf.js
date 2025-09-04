@@ -121,9 +121,6 @@ function buildAttributesByDriver(driver) {
 
 // ------------------- API Handler -------------------
 
-import chromium from "chrome-aws-lambda";
-import puppeteer from "puppeteer-core";
-
 export default async function handler(req, res) {
   try {
     const isLocal = !process.env.AWS_REGION; // Vercel sets AWS_REGION in lambda
