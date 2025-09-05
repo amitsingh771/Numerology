@@ -9,20 +9,22 @@ function sumDigitsToRoot(num) {
     n = n
       .toString()
       .split("")
-      .reduce((acc, d) => acc + parseInt(d, 10), 0);
+      .reduce((acc, d) => acc + Number.parseInt(d, 10), 0);
   }
   return n;
 }
 
 function computeDriverAndConductor(dob) {
-  const [yyyy, mm, dd] = (dob || "").split("-").map((p) => parseInt(p, 10));
+  const [yyyy, mm, dd] = (dob || "")
+    .split("-")
+    .map((p) => Number.parseInt(p, 10));
   if (!yyyy || !mm || !dd) return { driver: null, conductor: null };
   const driver = sumDigitsToRoot(dd);
   const allDigits = `${yyyy}${mm.toString().padStart(2, "0")}${dd
     .toString()
     .padStart(2, "0")}`;
   const conductor = sumDigitsToRoot(
-    allDigits.split("").reduce((a, b) => a + parseInt(b, 10), 0)
+    allDigits.split("").reduce((a, b) => a + Number.parseInt(b, 10), 0)
   );
   return { driver, conductor };
 }
@@ -53,7 +55,9 @@ function getOrdinalSuffix(n) {
 }
 
 function formatLongDate(dob) {
-  const [yyyy, mm, dd] = (dob || "").split("-").map((p) => parseInt(p, 10));
+  const [yyyy, mm, dd] = (dob || "")
+    .split("-")
+    .map((p) => Number.parseInt(p, 10));
   if (!yyyy || !mm || !dd) return dob || "";
   const monthNames = [
     "January",
@@ -138,74 +142,315 @@ export default async function handler(req, res) {
       'inline; filename="numerology-report.pdf"'
     );
 
-    const doc = new PDFDocument({ margin: 50 });
+    const doc = new PDFDocument({
+      margin: 60,
+      size: "A4",
+      bufferPages: true,
+    });
     doc.pipe(res);
 
-    // Page 1 - Cover
-    doc.fontSize(22).text("NUMEROLOGY REPORT", { align: "center" });
-    doc.moveDown();
-    doc.fontSize(16).text(fullName, { align: "center" });
-    doc.text(longDob, { align: "center" });
-    doc.moveDown();
-    doc.text(`Registration No: ${registrationNo}`);
-    doc.text(`Date: ${regDate}`);
-    doc.text(`Mobile: ${mobile}`);
-    doc.text(`Email: ${email}`);
+    // Define colors
+    const colors = {
+      primary: "#1e40af", // Deep blue
+      secondary: "#059669", // Emerald
+      accent: "#dc2626", // Red
+      gold: "#f59e0b", // Amber
+      text: "#1f2937", // Gray-800
+      lightText: "#6b7280", // Gray-500
+      background: "#f8fafc", // Slate-50
+      white: "#ffffff",
+    };
+
+    // Helper functions for design
+    function drawHeader(title, subtitle = null) {
+      doc.rect(0, 0, doc.page.width, 120).fill(colors.primary);
+      doc
+        .fillColor(colors.white)
+        .fontSize(28)
+        .font("Helvetica-Bold")
+        .text(title, 60, 40, { align: "center" });
+
+      if (subtitle) {
+        doc
+          .fontSize(14)
+          .font("Helvetica")
+          .text(subtitle, 60, 75, { align: "center" });
+      }
+
+      doc.fillColor(colors.text);
+    }
+
+    function drawSection(title, y = null) {
+      if (y) doc.y = y;
+      doc.moveDown(1);
+      doc.rect(60, doc.y, doc.page.width - 120, 2).fill(colors.secondary);
+      doc.moveDown(0.5);
+      doc
+        .fillColor(colors.primary)
+        .fontSize(18)
+        .font("Helvetica-Bold")
+        .text(title);
+      doc.fillColor(colors.text).moveDown(0.5);
+    }
+
+    function drawInfoBox(items, bgColor = colors.background) {
+      const startY = doc.y;
+      const boxHeight = items.length * 25 + 20;
+
+      doc
+        .rect(60, startY, doc.page.width - 120, boxHeight)
+        .fill(bgColor)
+        .stroke(colors.secondary);
+
+      doc.y = startY + 15;
+      items.forEach((item) => {
+        doc
+          .fillColor(colors.text)
+          .fontSize(12)
+          .font("Helvetica-Bold")
+          .text(item.label + ":", 80, doc.y, { width: 150 });
+
+        doc
+          .fillColor(colors.lightText)
+          .font("Helvetica")
+          .text(item.value, 240, doc.y, { width: 250 });
+
+        doc.y += 25;
+      });
+      doc.moveDown(1);
+    }
+
+    function drawNumberCircle(number, x, y, size = 60) {
+      doc
+        .circle(x, y, size / 2)
+        .fill(colors.primary)
+        .stroke(colors.secondary);
+
+      doc
+        .fillColor(colors.white)
+        .fontSize(size / 2)
+        .font("Helvetica-Bold")
+        .text(number.toString(), x - size / 4, y - size / 4, {
+          width: size / 2,
+          align: "center",
+        });
+    }
+
+    // Page 1 - Enhanced Cover Page
+    drawHeader("NUMEROLOGY REPORT", "Personal Cosmic Blueprint");
+
+    // Decorative elements
+    doc.circle(100, 200, 3).fill(colors.gold);
+    doc.circle(500, 180, 2).fill(colors.secondary);
+    doc.circle(450, 220, 1.5).fill(colors.accent);
+
+    doc.y = 160;
+    doc
+      .fillColor(colors.text)
+      .fontSize(24)
+      .font("Helvetica-Bold")
+      .text(fullName, { align: "center" });
+
+    doc
+      .fontSize(16)
+      .font("Helvetica")
+      .fillColor(colors.lightText)
+      .text(longDob, { align: "center" });
+
+    // Driver and Conductor numbers display
+    if (driver && conductor) {
+      drawNumberCircle(driver, 200, 300);
+      drawNumberCircle(conductor, 400, 300);
+
+      doc
+        .fillColor(colors.text)
+        .fontSize(12)
+        .font("Helvetica-Bold")
+        .text("Driver Number", 170, 370, { align: "center", width: 60 });
+
+      doc.text("Conductor Number", 370, 370, { align: "center", width: 60 });
+    }
+
+    // Registration details box
+    doc.y = 420;
+    drawInfoBox([
+      { label: "Registration No", value: registrationNo },
+      { label: "Report Date", value: regDate },
+      { label: "Mobile", value: mobile },
+      { label: "Email", value: email },
+    ]);
+
+    // Footer decoration
+    doc.rect(60, 700, doc.page.width - 120, 2).fill(colors.gold);
+
     doc.addPage();
 
-    // Page 2 - Intro
-    doc.fontSize(18).text("Introduction", { underline: true });
-    doc.moveDown();
-    doc.fontSize(12).text(
-      `Numerology is an index to the Encyclopaedia of Life. It is a study of numbers wherein every number has a different vibration. Numerology helps in finding out the niche for every individual. It offers the advantage of weeding out thorns or obstacles on the way & rather helps in providing short-cuts.
+    // Page 2 - Enhanced Introduction
+    drawHeader("INTRODUCTION", "Understanding Your Cosmic Numbers");
 
-This Reading is composed for you personally, Sunny and is based on your date of birth.
+    doc.y = 150;
+    drawSection("What is Numerology?");
 
-Date of Birth gives deep insights into the Life path, indicates skills one possesses as well as challenges one need to overcome. The day you were born bears great significance in understanding who you are going to head in life.
+    doc
+      .fontSize(12)
+      .font("Helvetica")
+      .fillColor(colors.text)
+      .text(
+        "Numerology is an ancient science that reveals the hidden meanings behind numbers in your life. It serves as your personal guide to understanding your destiny, personality traits, and life path.",
+        {
+          width: doc.page.width - 120,
+          align: "justify",
+          lineGap: 4,
+        }
+      );
 
-Name is a powerful tool to describe the course of our life & Numerology is one of the most powerful & influential science widely used all over the world to set the course of our life in complete harmony.
+    doc.moveDown(1);
+    drawSection("Your Personal Reading");
 
-Numerology is the study of divine relation between numbers & coinciding events in life.
-
-We are happy to help your redesign your identity through:
-
-• Your Favourable Numbers
-• Your Favourable Colours
-• Your Favourable Vibrations
-Gift yourself the best identification with the most favourable numbers & name for yourself & your business to stand out in the society.
-
-You have every right to attract abundance to live a harmonious & peaceful life.` // (shortened)
+    doc.text(
+      `This comprehensive reading has been specially prepared for ${fullName}, based on your birth date of ${longDob}. Every calculation and interpretation is unique to your cosmic blueprint.`,
+      {
+        width: doc.page.width - 120,
+        align: "justify",
+        lineGap: 4,
+      }
     );
+
+    doc.moveDown(1);
+    drawSection("What You'll Discover");
+
+    const benefits = [
+      "• Your core personality numbers and their meanings",
+      "• Favorable colors, days, and gemstones for success",
+      "• Career paths and life opportunities aligned with your numbers",
+      "• Relationship compatibility and personal growth insights",
+      "• Lucky directions and timing for important decisions",
+    ];
+
+    benefits.forEach((benefit) => {
+      doc.fontSize(11).text(benefit, {
+        width: doc.page.width - 120,
+        lineGap: 6,
+      });
+    });
+
     doc.addPage();
 
-    // Page 3 - Attributes
-    doc.fontSize(18).text("Numerology Details", { underline: true });
-    doc.moveDown();
-    doc.fontSize(12).text(`Driver Number: ${driver}`);
-    doc.text(`Conductor Number: ${conductor}`);
-    doc.text(`Ruling Planet: ${attrs.rulingPlanet}`);
-    doc.text(`Contributing Planet: ${attrs.contributingPlanet}`);
-    doc.text(`Favourable Days: ${attrs.favourableDays.join(", ")}`);
-    doc.text(`Favourable Colours: ${attrs.favourableColours.join(", ")}`);
-    doc.text(`Colours to Avoid: ${attrs.coloursToAvoid.join(", ")}`);
-    doc.text(`Favourable Metal: ${attrs.favourableMetal}`);
-    doc.text(`Favourable Gemstone: ${attrs.favourableGemstone}`);
+    // Page 3 - Enhanced Numerology Details
+    drawHeader("YOUR NUMBERS", "Core Numerological Profile");
+
+    doc.y = 150;
+
+    // Main numbers section
+    drawSection("Primary Numbers");
+    drawInfoBox([
+      { label: "Driver Number", value: driver?.toString() || "N/A" },
+      { label: "Conductor Number", value: conductor?.toString() || "N/A" },
+      { label: "Ruling Planet", value: attrs.rulingPlanet },
+      { label: "Contributing Planet", value: attrs.contributingPlanet },
+    ]);
+
+    drawSection("Favorable Elements");
+    drawInfoBox(
+      [
+        {
+          label: "Lucky Days",
+          value: attrs.favourableDays.join(", ") || "N/A",
+        },
+        {
+          label: "Power Colors",
+          value: attrs.favourableColours.join(", ") || "N/A",
+        },
+        {
+          label: "Avoid Colors",
+          value: attrs.coloursToAvoid.join(", ") || "N/A",
+        },
+        { label: "Lucky Metal", value: attrs.favourableMetal },
+        { label: "Power Gemstone", value: attrs.favourableGemstone },
+        { label: "Favorable Direction", value: attrs.direction },
+      ],
+      colors.background
+    );
+
+    if (attrs.wonderLetters.length > 0) {
+      drawSection("Wonder Letters");
+      doc
+        .fontSize(12)
+        .text(`Your power letters: ${attrs.wonderLetters.join(", ")}`, {
+          width: doc.page.width - 120,
+        });
+    }
+
     doc.addPage();
 
-    // Page 4 - Predictions
-    doc.fontSize(18).text("Numerology Prediction", { underline: true });
-    doc.moveDown();
+    // Page 4 - Enhanced Predictions
+    drawHeader("PREDICTIONS & GUIDANCE", "Your Cosmic Roadmap");
+
+    doc.y = 150;
+    drawSection("Personality Profile");
+
     doc
       .fontSize(12)
       .text(
-        `Ruled by ${attrs.rulingPlanet}. Leadership qualities, progressive, ambitious...`
+        `As someone ruled by ${attrs.rulingPlanet}, you possess natural leadership qualities and a progressive mindset. Your ambitious nature drives you toward success, while your innovative thinking sets you apart from others.`,
+        {
+          width: doc.page.width - 120,
+          align: "justify",
+          lineGap: 4,
+        }
       );
-    doc.moveDown();
-    doc.text(`Combination Fortune (${driver}/${conductor}):`);
-    doc.text(combo?.description || "No description available");
-    doc.moveDown();
-    doc.text("Roles/Profession:");
-    doc.text(combo?.roles_profession || "—");
+
+    if (combo) {
+      doc.moveDown(1);
+      drawSection(`Combination Fortune (${driver}/${conductor})`);
+
+      doc
+        .fontSize(11)
+        .text(
+          combo.description ||
+            "Your unique number combination reveals special insights into your life path and destiny.",
+          {
+            width: doc.page.width - 120,
+            align: "justify",
+            lineGap: 4,
+          }
+        );
+
+      if (combo.roles_profession) {
+        doc.moveDown(0.5);
+        drawSection("Career & Professional Path");
+        doc.fontSize(11).text(combo.roles_profession, {
+          width: doc.page.width - 120,
+          align: "justify",
+          lineGap: 4,
+        });
+      }
+    }
+
+    // Special notes
+    if (attrs.notes?.mobileWallpaper) {
+      doc.moveDown(1);
+      drawSection("Special Recommendations");
+      drawInfoBox(
+        [{ label: "Mobile Wallpaper", value: attrs.notes.mobileWallpaper }],
+        "#fef3c7"
+      ); // Light yellow background
+    }
+
+    // Footer with contact info
+    doc.y = 650;
+    doc.rect(60, doc.y, doc.page.width - 120, 2).fill(colors.gold);
+    doc.moveDown(0.5);
+    doc
+      .fontSize(10)
+      .fillColor(colors.lightText)
+      .text(
+        "This report is generated based on traditional numerological principles. Use this guidance as inspiration for your personal growth journey.",
+        {
+          align: "center",
+          width: doc.page.width - 120,
+        }
+      );
 
     doc.end();
   } catch (err) {
